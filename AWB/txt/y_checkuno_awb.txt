@@ -1,0 +1,54 @@
+y_checkuno_awb:--y_checkuno_awb
+declare @t_uno nvarchar(100) = [1]
+declare @t_noa nvarchar(50) = [2]
+declare @t_table nvarchar(50) = upper([3])
+declare @tmp table(
+	tablea nvarchar(20),
+	noa nvarchar(50),
+	noq nvarchar(20),
+	uno nvarchar(100),
+	productno nvarchar(50),
+	product nvarchar(50),
+	style nvarchar(20),
+	spec nvarchar(100),
+	dime float,
+	width float,
+	lengthb float,
+	emount float,
+	eweight float
+)
+insert into @tmp(tablea,noa,noq,uno,productno,product,style,spec,dime,width,lengthb,emount,eweight)
+	select
+		'RC2',a.noa,a.noq,a.uno,a.productno,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,
+		isnull(c.emount,a.mount),
+		isnull(c.eweight,a.weight)
+	from view_rc2s a
+	left join view_rc2 b on a.noa=b.noa
+	left join uccy c on a.uno=c.uno
+	where len(isnull(a.uno,''))>0
+	and (a.uno=@t_uno)
+	and not(@t_table='RC2' and a.noa=@t_noa)
+insert into @tmp(tablea,noa,noq,uno,productno,product,style,spec,dime,width,lengthb,emount,eweight)
+	select
+		'INA',a.noa,a.noq,a.uno,a.productno,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,
+		isnull(c.emount,a.mount),
+		isnull(c.eweight,a.weight)
+	from view_inas a
+	left join view_ina b on a.noa=b.noa
+	left join uccy c on a.uno=c.uno
+	where len(isnull(a.uno,''))>0
+	and (a.uno=@t_uno)
+	and not(@t_table='INA' and a.noa=@t_noa)
+insert into @tmp(tablea,noa,noq,uno,productno,product,style,spec,dime,width,lengthb,emount,eweight)
+	select
+		'CUTS',a.noa,a.noq,a.bno,a.productno,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,
+		isnull(c.emount,a.mount),
+		isnull(c.eweight,a.weight)
+	from view_cuts a
+	left join view_cut b on a.noa=b.noa
+	left join uccy c on a.uno=c.uno
+	where len(isnull(a.bno,''))>0
+	and (a.bno=@t_uno)
+	and not(@t_table='CUTS' and a.noa=@t_noa)
+
+select * from @tmp;

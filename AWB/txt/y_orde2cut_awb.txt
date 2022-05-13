@@ -1,0 +1,17 @@
+declare @t_bdime float = isnull(try_cast([1] as float),0)
+select
+	b.comp,a.accy,a.noa,a.no2,a.productno,a.product,a.unit,a.price,a.weight,a.memo,a.mount,a.total,a.datea,
+	a.cancel,a.type,a.custno,a.indate,a.enda,a.c2,a.notv2,a.odate,a.spec,a.no3,a.quatno,a.size,a.dime,a.width,
+	a.lengthb,a.c1,a.notv,a.style,a.uno,a.source,a.sale,a.slit,a.cut,a.theory,a.apv,a.radius,a.gweight,a.class,
+	a.lengthc,a.sprice,a.tablea,a.tableaccy,a.ucolor,a.scolor,a.custpro,a.unit2,a.classa,a.sizea,a.iscut,a.issale,
+	a.zinc,a.hard,a.packwayno,a.packway,a.cuft,a.payterms,a.profit,a.insurance,a.commission,a.benifit,a.width2,
+	a.width3,a.uno2,a.ordc,a.productno2,a.pack2,a.main,a.side,a.dimea,a.widtha,a.lengthba,a.dimeb,a.widthb,
+	a.lengthbb,a.frerea,a.fredate,a.custno3,a.comp3,b.casetype
+from view_ordes a
+left join view_orde b on a.noa=b.noa
+where (b.casetype='訂購')
+and (a.dime between (@t_bdime-0.5) and (@t_bdime+0.5))
+and isnull(a.enda,0)=0
+and isnull(a.cancel,0)=0
+and not exists(select noa from view_cuts xx where xx.ordeno=a.noa and xx.no2=a.no2)
+order by b.custno,a.productno,a.noa,a.no2;

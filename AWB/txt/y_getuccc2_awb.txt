@@ -1,0 +1,110 @@
+SET QUOTED_IDENTIFIER OFF
+declare @cmd nvarchar(max)
+declare @t_pno nvarchar(50) = [1]
+declare @t_spec nvarchar(50) = [2]
+declare @t_bdime float = isnull(try_cast([3] as float),0)
+declare @t_edime float = isnull(try_cast([7] as float),0)
+declare @t_width float = isnull(try_cast([4] as float),0)
+declare @t_lengthb float = isnull(try_cast([5] as float),0)
+declare @t_uno nvarchar(50) = [6]
+
+set @t_bdime=case when @t_bdime='' then '0' else @t_bdime end
+set @t_edime=case when @t_edime='' then '9999' else @t_edime end
+
+begin try
+	IF Object_id('tempdb..#ucccTemp') IS NOT NULL
+	BEGIN
+		DROP TABLE #ucccTemp
+	END
+end try
+begin catch
+end catch
+
+create table #ucccTemp(
+	uno nvarchar(100),
+	productno nvarchar(50),
+	product nvarchar(100),
+	dime float,
+	width float,
+	lengthb float,
+	emount float,
+	eweight float,
+	spec nvarchar(100),
+	style nvarchar(100),
+	price float
+)
+
+declare @xtable_name nvarchar(max)
+begin try
+	declare cursor_table1 cursor for
+		SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES where TABLE_NAME like 'rc2s[0-9][0-9][0-9]'
+	open cursor_table1
+	fetch next from cursor_table1
+	into @xtable_name
+		while(@@FETCH_STATUS <> -1)
+		begin
+			--------------------現有庫存----------------------
+			set @cmd ="
+			INSERT INTO #ucccTemp(uno,productno,product,dime,width,lengthb,emount,eweight,spec,style,price)
+			SELECT a.uno,a.style+a.productno,a.product,a.dime,a.width,a.lengthb,b.emount,b.eweight,a.spec,a.style,a.price
+			FROM "+replace(@xtable_name,'rc2s','rc2s') +" a left join uccy b on a.uno=b.uno 
+			where (isnull(b.eweight,a.weight)>0) and (len(a.uno)>2)
+				and (len('"+@t_uno+"')=0 or a.uno like '"+@t_uno+"%')
+				and (len('"+@t_pno+"')=0 or a.style+a.productno='"+@t_pno+"')
+				and (len('"+@t_spec+"')=0 or a.spec like '%"+@t_spec+"%')
+				and (a.dime between '"+cast(@t_bdime as nvarchar)+"' and '"+cast(@t_edime as nvarchar)+"')
+				and ("+cast(@t_width as nvarchar)+"=0 or a.width>="+cast(@t_width as nvarchar)+")
+				and ("+cast(@t_lengthb as nvarchar)+"=0 or a.lengthb="+cast(@t_lengthb as nvarchar)+")
+			"
+			EXECUTE sp_executesql @cmd --rc2
+
+			set @cmd ="
+			INSERT INTO #ucccTemp(uno,productno,product,dime,width,lengthb,emount,eweight,spec,style,price)
+			SELECT a.uno,a.productno,a.product,a.dime,a.width,a.lengthb,c.emount,c.eweight,a.spec,a.style,a.price
+			FROM "+replace(@xtable_name,'rc2s','inas') + " a left join uccy c on a.uno=c.uno 
+			where (isnull(c.eweight,a.weight)>0) and (len(a.uno)>2)
+				and (len('"+@t_uno+"')=0 or a.uno like '"+@t_uno+"%')
+				and (len('"+@t_pno+"')=0 or a.productno='"+@t_pno+"')
+				and (len('"+@t_spec+"')=0 or a.spec like '%"+@t_spec+"%')
+				and (a.dime between '"+cast(@t_bdime as nvarchar)+"' and '"+cast(@t_edime as nvarchar)+"')
+				and ("+cast(@t_width as nvarchar)+"=0 or a.width>="+cast(@t_width as nvarchar)+")
+				and ("+cast(@t_lengthb as nvarchar)+"=0 or a.lengthb="+cast(@t_lengthb as nvarchar)+")
+			"
+			EXECUTE sp_executesql @cmd --ina
+			set @cmd ="
+			INSERT INTO #ucccTemp(uno,productno,product,dime,width,lengthb,emount,eweight,spec,style,price)
+			SELECT a.bno,a.productno,a.product,a.dime,a.width,a.lengthb,c.emount,c.eweight,a.spec,a.style,0
+			FROM "+replace(@xtable_name,'rc2s','cuts') + " a left join "+replace(@xtable_name,'rc2s','cut') + " b on a.noa=b.noa" +" left join uccy c on a.bno=c.uno
+			where (isnull(c.eweight,a.weight)>0) and (len(a.bno)>2)
+				and (len('"+@t_uno+"')=0 or a.bno like '"+@t_uno+"%')
+				and (len('"+@t_pno+"')=0 or a.productno='"+@t_pno+"')
+				and (len('"+@t_spec+"')=0 or a.spec like '%"+@t_spec+"%')
+				and (a.dime between '"+cast(@t_bdime as nvarchar)+"' and '"+cast(@t_edime as nvarchar)+"')
+				and ("+cast(@t_width as nvarchar)+"=0 or a.width>="+cast(@t_width as nvarchar)+")
+				and ("+cast(@t_lengthb as nvarchar)+"=0 or a.lengthb="+cast(@t_lengthb as nvarchar)+")
+			"
+			EXECUTE sp_executesql @cmd --cut
+		fetch next from cursor_table1
+		into @xtable_name
+		end
+	close cursor_table1
+	deallocate cursor_table1
+end try
+begin catch
+end catch
+
+update a set product=c.product+b.product
+from #ucccTemp a
+left join style b on left(a.productno,1)=b.noa
+left join ucc c on right(a.productno,len(a.productno)-1)=c.noa
+where isnull(a.product,'')='' and len(a.productno)>=2
+
+select * from #ucccTemp order by dime desc,width,lengthb,uno
+begin try
+	IF Object_id('tempdb..#ucccTemp') IS NOT NULL
+	BEGIN
+		DROP TABLE #ucccTemp
+	END
+end try
+begin catch
+end catch;

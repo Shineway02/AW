@@ -1,0 +1,143 @@
+z_ordc_awb01:--z_ordc_awb01
+declare @t_btggno nvarchar(50) = case when '#non' = [2] then '' else [2] end 
+declare @t_etggno nvarchar(50) = case when '#non' = [3] then char(255) else [3] end 
+declare @t_bproductno nvarchar(50) = case when '#non' = [4] then '' else [4] end 
+declare @t_eproductno nvarchar(50) = case when '#non' = [5] then char(255) else [5] end 
+declare @t_bdatea nvarchar(50) = case when '#non' = [6] then '' else [6] end 
+declare @t_edatea nvarchar(50) = case when '#non' = [7] then char(255) else [7] end
+declare @t_rc2ed nvarchar(10) = case when '#non' = [8] then '' else [8] end 
+
+begin try
+		IF Object_id('tempdb..#temp') IS NOT NULL
+		BEGIN
+			DROP TABLE #temp
+		END
+	end try
+	begin catch
+	end catch
+	create table #temp(
+		idno int identity(1,1),
+		gno nvarchar(10),
+		noa nvarchar(50),
+		no2 nvarchar(20),
+		comp nvarchar(100),
+		productno nvarchar(50),
+		product nvarchar(50),
+		spec nvarchar(100),
+		csize nvarchar(max),
+		mount float,
+		oweight float,
+		rc2no nvarchar(50),
+		rc2noq nvarchar(20),
+		vweight float,
+		datea nvarchar(20),
+		memo nvarchar(max)
+	)
+	--111/03/23 數量一律抓取重量 空白備註不顯示 會計李小姐
+	insert into #temp(gno,noa,no2,comp,productno,product,spec,csize,mount,oweight,vweight,datea,memo)
+	select
+		'0',a.noa,a.no2,dbo.qleft(b.tgg,8),a.productno,dbo.qleft(a.product,8),dbo.qleft(a.spec,8),
+		replace(dbo.getComma(a.dime,2),',','') + ' x ' + replace(dbo.getComma(a.width,1),',','') + case when isnull(a.lengthb,0) != 0 then ' x ' + replace(dbo.getComma(a.lengthb,1),',','') else '' end,
+		a.weight,a.weight,c.weight,a.indate,a.memo
+	from view_ordcs a
+	left join view_ordc b on a.noa=b.noa
+	outer apply(select sum(weight) weight from view_rc2s xx where xx.ordeno=a.noa and xx.no2=a.no2) c
+	where (b.odate between @t_bdatea and @t_edatea)
+	and (b.tggno between @t_btggno and @t_etggno)
+	and (isnull(a.productno,'') != '')
+	and (a.productno between @t_bproductno and @t_eproductno)
+	and ((len(@t_rc2ed)=0 and isnull(a.enda,0)=0) or @t_rc2ed='Y')
+	and (isnull(b.contract,'')='訂購')
+	and (isnull(a.cancel,0)=0)
+	order by a.noa,a.productno
+	
+	insert into #temp(gno,noa,no2,comp,productno,product,spec,csize,mount,oweight,vweight,datea,memo)
+	select
+		'1',noa,no2,comp,productno,product,spec,csize,mount,oweight,vweight,datea,memo
+	from #temp
+	where ltrim(rtrim(memo)) != ''
+	
+	insert into #temp(gno,noa,no2,comp,productno,oweight,vweight,rc2no,rc2noq,datea)
+		select
+			'3',a.noa,a.no2,a.comp,a.productno,a.oweight,b.weight,b.noa,b.noq,b.datea
+		from #temp a
+		left join view_rc2s b on a.noa=b.ordeno and a.no2=b.no2
+		where isnull(b.noa,'') != '' and gno!=1
+		order by b.noa,b.noq
+
+	select
+		case when a.idno=b.midno then
+		case when a.gno='0' then '4'
+			 when a.gno='1' then '2'
+			 when a.gno='3' then '5'
+		end
+		else a.gno end gno,
+		a.noa,a.no2,a.comp,a.productno,a.product,a.spec,a.csize,a.mount,a.oweight,a.rc2no,a.rc2noq,a.vweight,a.datea
+		,N'備註：' +a.memo memo
+	from #temp a
+	outer apply(select max(idno) midno from #temp xx where xx.noa=a.noa) b
+	order by a.noa,a.productno,a.no2,a.gno,a.rc2no,a.rc2noq
+
+	begin try
+		IF Object_id('tempdb..#temp') IS NOT NULL
+		BEGIN
+			DROP TABLE #temp
+		END
+	end try
+	begin catch
+	end catch
+;
+-----------------------------------------------------------------------------------------------------------------------------
+z_ordc_awb02:--z_ordc_awb02
+declare @t_bdatea nvarchar(50) = case when '#non' = [6] then '' else [6] end 
+declare @t_edatea nvarchar(50) = case when '#non' = [7] then char(255) else [7] end
+declare @t_bydate nvarchar(50) = case when '#non' = [9] then '' else [9] end 
+declare @t_eydate nvarchar(50) = case when '#non' = [10] then char(255) else [10] end
+declare @t_bnoa nvarchar(50) = case when '#non' = [11] then '' else [11] end 
+declare @t_enoa nvarchar(50) = case when '#non' = [12] then char(255) else [12] end
+declare @t_group nvarchar(10) = case when '#non' = [13] then '' else [13] end
+declare @t_enda nvarchar(20) = case when '#non' = [14] then '' else [14] end
+declare @tmp table(
+	gno nvarchar(10),
+	noa nvarchar(50),
+	no2 nvarchar(20),
+	comp nvarchar(100),
+	pno nvarchar(50),
+	product nvarchar(100),
+	spec nvarchar(100),
+	csize nvarchar(max),
+	mount float,
+	c1 float,
+	price float,
+	total float,
+	datea nvarchar(50),
+	enda nvarchar(10)
+)
+insert into @tmp(gno,noa,no2,comp,pno,product,spec,csize,mount,c1,price,datea,total,enda)
+select
+	'0',a.noa,a.no2,b.tgg,a.productno,a.product,a.spec,
+	replace(dbo.getComma(a.dime,2),',','') + ' x ' + replace(dbo.getComma(a.width,1),',','') + case when isnull(a.lengthb,0) != 0 then ' x ' + replace(dbo.getComma(a.lengthb,1),',','') else '' end,
+	a.weight,a.c1,a.price,a.indate,a.total,case when isnull(a.enda,0)=1 then 'Y' else 'N' end
+from view_ordcs a
+left join view_ordc b on a.noa=b.noa
+where (b.odate between @t_bdatea and @t_edatea)
+and (a.datea between @t_bydate and @t_eydate)
+and (a.noa between @t_bnoa and @t_enoa)
+and (len(@t_group)=0 or (@t_group='CASH' and isnull(b.atax,0)=1) or (@t_group!='CASH' and isnull(b.atax,0)=0))
+and (isnull(b.contract,'') != '詢價')
+and (len(@t_enda)=0 or (@t_enda='Y' and isnull(a.enda,0)=1) or (@t_enda='N' and isnull(a.enda,0)=0))
+insert into @tmp(gno,mount,total)
+	select '1',sum(mount),sum(total) from @tmp
+select
+	gno,noa,no2,
+	dbo.qleft(comp,8) comp,
+	dbo.qleft(product,10) product,
+	dbo.qleft(spec,10) spec,
+	csize,
+	dbo.getComma(mount,2) mount,
+	dbo.getComma(c1,1) c1,
+	dbo.getComma(price,2) price,
+	datea,
+	dbo.getComma(total,0) total,
+	enda
+from @tmp order by gno,noa,no2;

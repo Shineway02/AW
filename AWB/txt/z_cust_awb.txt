@@ -1,0 +1,245 @@
+z_cust_awb01:--z_cust_awb01
+declare @t_bcustno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_ecustno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+declare @tmp table(
+	gno nvarchar(10),
+	noa nvarchar(50),
+	comp nvarchar(100),
+	boss nvarchar(50),
+	conn nvarchar(50),
+	serial nvarchar(50),
+	mobile nvarchar(max),
+	tel nvarchar(max),
+	zipcode nvarchar(20),
+	fax nvarchar(max),
+	addr1 nvarchar(max),
+	addr2 nvarchar(max),
+	addr3 nvarchar(max)
+)
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+select
+	'0',noa,comp,boss,conn,serial,
+	dbo.qleft(mobile,40),
+	dbo.qleft(tel,38),
+	'郵遞區號：' + isnull(zip_home,''),
+	dbo.qleft(fax,30),
+	addr_fact,
+	addr_invo,
+	addr_home
+from cust
+where (noa between @t_bcustno and @t_ecustno)
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '1',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0'
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '2',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0' and isnull(addr1,'') != ''
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '3',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0' and isnull(addr2,'') != ''
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '4',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0' and isnull(addr3,'') != ''
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '5',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0'
+
+select
+	*
+from @tmp
+order by noa,gno;
+------------------------------------------------------------------------------------------------------------------------
+z_cust_awb02:--z_cust_awb02
+declare @t_bcustno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_ecustno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+declare @tmp table(
+	gno nvarchar(10),
+	custno nvarchar(10),
+	comp nvarchar(50),
+	conn nvarchar(50),
+	tel nvarchar(max),
+	mobile nvarchar(max),
+	fax nvarchar(max)
+)
+insert into @tmp(gno,custno,comp,conn,tel,mobile,fax)
+select
+	'0',noa,dbo.qleft(comp,8),
+	dbo.qleft(conn,8),
+	dbo.qleft(tel,35),
+	dbo.qleft(mobile,25),
+	dbo.qleft(fax,35)
+from cust
+where (noa between @t_bcustno and @t_ecustno)
+order by noa
+
+select * from @tmp
+order by custno;
+---------------------------------------------------------------------------------------------------------------------
+z_cust_awb03:--z_cust_awb03
+declare @t_bcustno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_ecustno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+declare @pageLine int = 383
+declare @data table(
+	pageno int,
+	xid int,
+	noa nvarchar(50),
+	comp nvarchar(50)
+)
+insert into @data(noa,comp,xid,pageno)
+select
+	noa,dbo.qleft(comp,8),
+	((ROW_NUMBER()over(order by noa)-1)%@pageLine)+1,
+	ceiling((ROW_NUMBER()over(order by noa)-1)/@pageLine)+1
+from cust
+where noa between @t_bcustno and @t_ecustno
+order by noa
+
+declare @tmp table(
+	gno nvarchar(10),
+	pageno int,
+	xid int,
+	u01 nvarchar(50),
+	u02 nvarchar(50),
+	u03 nvarchar(50),
+	u04 nvarchar(50),
+	u05 nvarchar(50),
+	u06 nvarchar(50),
+	u07 nvarchar(50),
+	u08 nvarchar(50),
+	u09 nvarchar(50),
+	u10 nvarchar(50),
+	u11 nvarchar(50),
+	u12 nvarchar(50),
+	u13 nvarchar(50),
+	u14 nvarchar(50),
+	u15 nvarchar(50),
+	u16 nvarchar(50)
+)
+insert into @tmp(gno,pageno,xid,u01,u02,u03,u04,u05,u06,u07,u08,u09,u10,u11,u12,u13,u14,u15,u16)
+select
+	'0',a.pageno,b.xid,b.noa,b.comp,c.noa,c.comp,d.noa,d.comp,e.noa,e.comp,f.noa,f.comp,g.noa,g.comp,h.noa,h.comp,j.noa,j.comp
+from (select distinct pageno from @data) a
+left join @data b on b.pageno=a.pageno and (b.xid between (@pageLine*0) and ((@pageLine/8)*1))
+left join @data c on c.pageno=a.pageno and (c.xid = b.xid+((@pageLine/8)*1))
+left join @data d on d.pageno=a.pageno and (d.xid = b.xid+((@pageLine/8)*2))
+left join @data e on e.pageno=a.pageno and (e.xid = b.xid+((@pageLine/8)*3))
+left join @data f on f.pageno=a.pageno and (f.xid = b.xid+((@pageLine/8)*4))
+left join @data g on g.pageno=a.pageno and (g.xid = b.xid+((@pageLine/8)*5))
+left join @data h on h.pageno=a.pageno and (h.xid = b.xid+((@pageLine/8)*6))
+left join @data j on j.pageno=a.pageno and (j.xid = b.xid+((@pageLine/8)*7))
+
+select
+	case when xid=(@pageLine/8) then 1 else 0 end gno,
+	pageno,xid,
+	dbo.qleft(u01,4) u01,
+	u02,
+	dbo.qleft(u03,4) u03,
+	u04,
+	dbo.qleft(u05,4) u05,
+	u06,
+	dbo.qleft(u07,4) u07,
+	u08,
+	dbo.qleft(u09,4) u09,
+	u10,
+	dbo.qleft(u11,4) u11,
+	u12,
+	dbo.qleft(u13,4) u13,
+	u14,
+	dbo.qleft(u15,4) u15,
+	u16
+from @tmp
+order by pageno,gno,xid;
+-------------------------------------------------------------------------------------------------------
+z_cust_awb04:--z_cust_awb04
+declare @t_bcustno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_ecustno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+
+select
+	'0' gno,noa,
+	dbo.qleft(comp,30) comp,
+	dbo.qleft(addr_fact,32) addr,
+	dbo.qleft(tel,17) tel,
+	dbo.qleft(fax,11) fax,
+	dbo.qleft(serial,10) serial
+from cust
+where noa between @t_bcustno and @t_ecustno
+order by noa;
+------------------------------------------------------------------------------------------------------------------------
+z_cust_awb05:--z_cust_awb05
+declare @t_btggno nvarchar(50) = case when '#non'=[4] then '' else [4] end
+declare @t_etggno nvarchar(50) = case when '#non'=[5] then char(255) else [5] end
+declare @tmp table(
+	gno nvarchar(10),
+	noa nvarchar(50),
+	comp nvarchar(100),
+	boss nvarchar(50),
+	conn nvarchar(50),
+	serial nvarchar(50),
+	mobile nvarchar(max),
+	tel nvarchar(max),
+	zipcode nvarchar(20),
+	fax nvarchar(max),
+	addr1 nvarchar(max),
+	addr2 nvarchar(max),
+	addr3 nvarchar(max)
+)
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+select
+	'0',noa,comp,boss,conn,serial,
+	dbo.qleft(mobile,40),
+	dbo.qleft(tel,38),
+	'郵遞區號：' + isnull(zip_home,''),
+	dbo.qleft(fax,30),
+	addr_fact,
+	addr_invo,
+	addr_home
+from tgg
+where (noa between @t_btggno and @t_etggno)
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '1',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0'
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '2',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0' and isnull(addr1,'') != ''
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '3',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0' and isnull(addr2,'') != ''
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '4',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0' and isnull(addr3,'') != ''
+
+insert into @tmp(gno,noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3)
+	select '5',noa,comp,boss,conn,serial,mobile,tel,zipcode,fax,addr1,addr2,addr3 from @tmp where gno='0'
+
+select
+	*
+from @tmp
+order by noa,gno;
+------------------------------------------------------------------------------------------------------------------------
+z_cust_awb06:--z_cust_awb06
+declare @t_btggno nvarchar(50) = case when '#non'=[4] then '' else [4] end
+declare @t_etggno nvarchar(50) = case when '#non'=[5] then char(255) else [5] end
+select
+	'0' gno,noa,
+	dbo.qleft(comp,30) comp,
+	dbo.qleft(addr_fact,36) addr,
+	dbo.qleft(tel,21) tel,
+	dbo.qleft(fax,15) fax,
+	dbo.qleft(serial,10) serial
+from tgg
+where noa between @t_btggno and @t_etggno
+order by noa;
+-------------------------------------------------------------------------------------------------------
+z_cust_awb07:--z_cust_awb07
+declare @t_buccno nvarchar(50) = case when '#non'=[6] then '' else [6] end
+declare @t_euccno nvarchar(50) = case when '#non'=[7] then char(255) else [7] end
+select
+	'0' gno,
+    noa,
+	product,
+	dbo.qleft(unit,4) unit,
+	dbo.getComma(density,2) density,
+	memo
+from ucc
+where noa between @t_buccno and @t_euccno
+order by noa;

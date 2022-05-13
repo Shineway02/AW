@@ -1,0 +1,200 @@
+z_gqb_awb01:--z_gqb_awb01
+declare @t_account nvarchar(50) = case when '#non'=[4] then '' else [4] end
+declare @t_bindate nvarchar(20) = case when '#non'=[5] then '' else [5] end
+declare @t_eindate nvarchar(20) = case when '#non'=[6] then char(255) else [6] end
+declare @t_endx nvarchar(20) = case when '#non'=[7] then '' else [7] end
+declare @tmp table(
+	gno nvarchar(10),
+	indate nvarchar(20),
+	outa nvarchar(10),
+	typea nvarchar(20),
+	gqbno nvarchar(50),
+	account nvarchar(100),
+	abank nvarchar(100),
+	money float,
+	comp nvarchar(100),
+	tbankno nvarchar(100),
+	counta float
+)
+insert into @tmp(gno,indate,outa,typea,gqbno,account,abank,money,comp,tbankno)
+select
+	'0',a.indate,case when left(a.account,1)='*' then '外' else '' end,
+	case when isnull(tdate,'') != '' then '託收' else '收票' end,
+	a.gqbno,
+	dbo.qleft(a.account,12),
+	dbo.qleft(a.bank,20),
+	a.money,
+	dbo.qleft(a.comp,8),
+	dbo.qleft(a.tbankno,8)
+from gqb a
+where (isnull(a.indate,'') between @t_bindate and @t_eindate)
+and (@t_endx!='N' or (@t_endx='N' and isnull(tdate,'')=''))
+and (len(@t_account)='' or isnull(tbankno,'')=@t_account)
+and (a.typea='1')
+
+insert into @tmp(gno,indate,money)
+	select '1',indate,sum(money) from @tmp where gno='0' group by indate
+
+insert into @tmp(gno,indate,money,counta)
+	select '2',char(255),sum(money),count(*) from @tmp where gno='0'
+select
+	gno,indate,outa,typea,gqbno,account,abank,
+    dbo.getComma(money,0) money,
+    comp,tbankno,counta
+from @tmp
+order by indate,gno,abank;
+-----------------------------------------------------------------------------------------------------------
+z_gqb_awb02:--z_gqb_awb02
+declare @t_bindate nvarchar(20) = case when '#non'=[5] then '' else [5] end
+declare @t_eindate nvarchar(20) = case when '#non'=[6] then char(255) else [6] end
+declare @tmp table(
+	gno nvarchar(10),
+	indate nvarchar(20),
+	typea nvarchar(20),
+	gqbno nvarchar(50),
+	bankno nvarchar(50),
+	abank nvarchar(100),
+	money float,
+	tcomp nvarchar(100),
+	counta float
+)
+insert into @tmp(gno,indate,typea,gqbno,bankno,abank,money,tcomp)
+select
+	'0',a.indate,
+	'開票',
+	a.gqbno,
+	a.bankno,
+	dbo.qleft(a.bank,20),
+	a.money,
+	dbo.qleft(a.tcomp,8)
+from gqb a
+where (isnull(a.indate,'') between @t_bindate and @t_eindate)
+and (a.typea='2')
+
+insert into @tmp(gno,indate,money)
+	select '1',indate,sum(money) from @tmp where gno='0' group by indate
+
+insert into @tmp(gno,indate,money,counta)
+	select '2',char(255),sum(money),count(*) from @tmp where gno='0'
+select
+	gno,indate,typea,gqbno,bankno,abank,
+	dbo.getComma(money,0) money,
+	tcomp,counta
+from @tmp
+order by indate,gno,abank;
+-----------------------------------------------------------------------------------------------------------
+z_gqb_awb03:--z_gqb_awb03
+declare @t_bbank nvarchar(20) = case when '#non'=[2] then '' else [2] end
+declare @t_ebank nvarchar(20) = case when '#non'=[3] then char(255) else [3] end
+declare @t_bindate nvarchar(20) = case when '#non'=[5] then '' else [5] end
+declare @t_eindate nvarchar(20) = case when '#non'=[6] then char(255) else [6] end
+declare @tmp table(
+	gno nvarchar(10),
+	indate nvarchar(20),
+	typea nvarchar(20),
+	gqbno nvarchar(50),
+	bankno nvarchar(50),
+	abank nvarchar(100),
+	money float,
+	tcomp nvarchar(100),
+	counta float
+)
+insert into @tmp(gno,indate,typea,gqbno,bankno,abank,money,tcomp)
+select
+	'0',a.indate,
+	'開票',
+	a.gqbno,
+	a.bankno,
+	dbo.qleft(a.bank,20),
+	a.money,
+	dbo.qleft(a.tcomp,8)
+from gqb a
+where (isnull(a.indate,'') between @t_bindate and @t_eindate)
+and (isnull(a.bankno,'') between @t_bbank and @t_ebank)
+and (a.typea='2')
+
+insert into @tmp(gno,bankno,abank,indate,money)
+	select '1',bankno,abank,indate,sum(money) from @tmp where gno='0' group by bankno,abank,indate
+
+insert into @tmp(gno,bankno,abank,indate,money,counta)
+	select '2',bankno,abank,char(255),sum(money),count(*) from @tmp where gno='0' group by bankno,abank
+select
+	gno,indate,typea,gqbno,bankno,abank,
+	dbo.getComma(money,0) money,
+	tcomp,counta
+from @tmp
+order by bankno,abank,indate,gno;
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+z_gqb_awb04:--z_gqb_awb04
+	declare @t_bnoa nvarchar(20) = case when '#non'=[8] then '' else [8] end
+	declare @t_enoa nvarchar(20) = case when '#non'=[9] then '' else [9] end
+	declare @t_password nvarchar(max) = case when '#non'=[10] then '' else [10] end
+
+	declare @tmp table(
+		gno nvarchar(30),
+		noa nvarchar(200),
+		gqbno nvarchar(30),
+		datea1 nvarchar(10),
+		yy nvarchar(5),
+		mm nvarchar(5),
+		dd nvarchar(5),
+		datea2 nvarchar(30),
+		comp nvarchar(80),
+		nick nvarchar(50),
+		money1 float,
+		chmoney nvarchar(100)
+
+	)
+
+	insert @tmp 
+	select '1',a.noa,a.gqbno,a.indate,left(a.indate,3),substring(a.indate,5,2),right(a.indate,2),'開票日'+a.datea,
+	isnull(b.comp,case when a.typea='1' then a.comp when a.typea='2' then a.tcomp else '' end),
+	isnull(b.nick,case when a.typea='1' then a.comp when a.typea='2' then a.tcomp else '' end),
+	a.money,replace(dbo.getComma(a.money,0),',','')
+	from gqb a
+	left join cust b on case when a.typea='1' then a.compno when a.typea='2' then a.tcompno else '' end=b.noa
+	where a.gqbno between @t_bnoa and @t_enoa
+
+	declare @unit varchar(50) = '元拾佰仟萬拾佰仟億拾佰仟兆拾佰仟'
+	declare @str varchar(20) = '零壹貳參肆伍陸柒捌玖'
+
+	declare @noa nvarchar(200),@chmoney nvarchar(50),@i int,@mount int,@len int,@chnum nvarchar(200)
+	
+	declare cursor_table cursor for 
+		select noa,chmoney,len(chmoney)
+		from @tmp
+	open cursor_table 
+	fetch next from cursor_table 
+	into @noa,@chmoney,@mount
+	while(@@FETCH_STATUS <> -1) 
+	begin
+		select @i=1,@chnum=''
+		while(@i<=@mount)
+		begin
+			select @len=len(@chmoney)
+
+			if(cast(substring(@chmoney,@len,1)as int)>0)
+				select @chnum=substring(@str,cast(substring(@chmoney,@len,1)as int)+1,1)+substring(@unit,@i,1)+@chnum
+
+			select @i=@i+1,@chmoney=left(@chmoney,len(@chmoney)-1)
+		end
+
+		update @tmp set chmoney = @chnum+'整' where noa = @noa
+
+		fetch next from cursor_table 
+		into @noa,@chmoney,@mount
+	end 
+	close cursor_table 
+	deallocate cursor_table
+
+	if(@t_password!='JAN.')
+		delete @tmp
+		
+	select dbo.getComma(money1,0)money1,* from @tmp
+
+
+
+
+
+
+;

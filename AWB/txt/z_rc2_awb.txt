@@ -1,0 +1,415 @@
+z_rc2_awb01:--z_rc2_awb01
+declare @t_btggno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_etggno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+declare @t_bmon nvarchar(50) = case when '#non'=[4] then '' else [4] end
+declare @t_emon nvarchar(50) = case when '#non'=[5] then char(255) else [5] end
+declare @t_bdate nvarchar(50) = case when '#non'=[6] then '' else [6] end
+declare @t_edate nvarchar(50) = case when '#non'=[7] then char(255) else [7] end
+declare @t_pay nvarchar(10) = case when '#non'=[8] then '' else [8] end
+declare @t_invo nvarchar(10) = case when '#non'=[9] then '' else [9] end
+
+declare @t_pageLine int = 13
+declare @tmp table(
+	idno int identity(1,1),
+	gno int,
+	xid int,
+	pageno int,
+	kindsort int,
+	tggno nvarchar(50),
+	comp nvarchar(100),
+	mon nvarchar(20),
+	datea nvarchar(20),
+	typea nvarchar(10),
+	coin nvarchar(10),
+	noa nvarchar(20),
+	noq nvarchar(10),
+	productno nvarchar(50),
+	product nvarchar(100),
+	spec nvarchar(100),
+	csize nvarchar(max),
+	dime float,
+	width float,
+	lengthb float,
+	mount float,
+	weight float,
+	unit nvarchar(10),
+	price float,
+	money float,
+	tax float,
+	total float,
+	memo nvarchar(max),
+	tot01 float,
+	tot02 float,
+	tot03 float,
+	tot04 float,
+	tot05 float,
+	tot06 float,
+	checkno nvarchar(50),
+	bank nvarchar(100),
+	date2 nvarchar(20)
+)
+------gno =
+------------1 廠商請款明細表 標題列
+------------2 廠商請款明細表 明細列
+------------3 廠商請款明細表 單據備註列
+------------4 廠商請款明細表 本月應付列
+------------5 廠商請款明細表 未付金額列
+------------6 廠商請款明細表 已付金額列
+------------7 廠商請款明細表 應付帳款總計列
+
+------------8 廠商付款資料明細 標題列
+------------9 廠商付款資料明細 明細列
+------------10 廠商付款資料明細 合計列
+
+------------11 廠商開立發票明細 標題列
+------------12 廠商開立發票明細 明細列
+------------13 廠商開立發票明細 合計列
+
+------------14 跳頁列
+insert into @tmp(gno,kindsort,tggno,comp,mon,datea,typea,coin,noa,noq,productno,product,spec,csize,dime,width,lengthb,mount,weight,unit,price,tax,total,memo)
+select
+	2,1,b.tggno,c.comp,b.mon,b.datea,
+	case b.typea when '1' then '進' else '退' end,
+	case when isnull(b.floata,0)=0 then '' else 'US' end,
+	a.noa,a.noq,a.productno,
+	dbo.qleft(a.product,8),
+	dbo.qleft(a.spec,8),
+	replace(dbo.getComma(a.dime,2),',','') + ' x ' + replace(dbo.getComma(a.width,1),',','') + case when isnull(a.lengthb,0) != 0 then ' x ' + replace(dbo.getComma(a.lengthb,1),',','') else '' end,
+	a.dime,a.width,a.lengthb,
+	a.mount,a.weight,a.unit,a.price,
+	case when isnull(a.class,'')='N' then 0 else isnull(a.total,0)*0.05 end*case b.typea when '1' then 1 else -1 end,
+	a.total*case b.typea when '1' then 1 else -1 end,b.memo
+from view_rc2s a
+left join view_rc2 b on a.noa=b.noa
+left join tgg c on b.tggno=c.noa
+where (b.tggno between @t_btggno and @t_etggno)
+and (b.mon between @t_bmon and @t_emon)
+order by a.noa,a.noq
+
+insert into @tmp(gno,kindsort,tggno,comp,datea,typea,coin,noa,noq,memo)
+	select 3,kindsort,tggno,comp,datea,typea,coin,noa,char(255),memo from @tmp where kindsort=1 and ltrim(rtrim(isnull(memo,''))) != '' group by kindsort,tggno,comp,datea,typea,coin,noa,memo
+
+insert into @tmp(gno,kindsort,tggno,comp,noa,coin,price,tax,money,total,memo)
+	select
+		4,kindsort,tggno,comp,char(255),coin,
+		sum(case when typea='進' then isnull(total,0) else 0 end),
+		sum(isnull(tax,0)),
+		sum(case when typea='退' then isnull(total,0) else 0 end),
+		sum(isnull(total,0)+isnull(tax,0)),
+		'廠商請款明細表 本月應付列'
+	from @tmp where kindsort=1 and gno=2 group by kindsort,tggno,comp,coin
+
+insert into @tmp(gno,kindsort,tggno,comp,noa,coin,total,mon,memo)
+	select
+		5,a.kindsort,a.tggno,a.comp,a.noa,a.coin,b.unpay,b.mon,
+		'廠商請款明細表 未付金額列'
+	from @tmp a
+	left join tgg_2s b on a.tggno=b.noa and b.mon<@t_bmon
+	where kindsort=1 and gno=4 and isnull(b.unpay,0)!=0
+
+insert into @tmp(gno,kindsort,tggno,comp,noa,coin,total,memo)
+	select
+		6,a.kindsort,a.tggno,a.comp,a.noa,a.coin,sum(b.pay),
+		'廠商請款明細表 已付金額列'
+	from @tmp a
+	left join tgg_2s b on a.tggno=b.noa and (b.mon between @t_bmon and @t_emon) and isnull(b.pay,0)!=0
+	where kindsort=1 and gno=4
+	group by a.kindsort,a.tggno,a.comp,a.noa,a.coin
+	having sum(b.pay) != 0
+
+insert into @tmp(gno,kindsort,tggno,comp,noa,coin,total,memo)
+	select
+		7,a.kindsort,a.tggno,a.comp,a.noa,a.coin,
+		sum(isnull(a.total,0)*case when gno=6 then -1 else 1 end),
+		'廠商請款明細表 應付帳款總計列'
+	from @tmp a
+	where kindsort=1 and (gno between 4 and 6)
+	group by a.kindsort,a.tggno,a.comp,a.noa,a.coin
+
+if(@t_pay='Y')
+begin
+	insert into @tmp(gno,kindsort,tggno,comp,noa,tot01,tot02,tot03,tot04,tot05,tot06)
+		select
+			9,2,b.tggno,c.comp,b.datea,
+			sum(case when isnull(a.acc2,'')=N'現金' then a.money else 0 end),
+			sum(case when isnull(a.acc2,'')=N'匯款' then a.money else 0 end),
+			sum(case when isnull(a.acc2,'')=N'信用狀' then a.money else 0 end),
+			sum(case when isnull(a.acc2,'')=N'同業對扣' then a.money else 0 end),
+			sum(case when isnull(a.acc2,'')=N'折讓金額' then a.money else 0 end),
+			sum(case when isnull(a.acc2,'')=N'補價' then a.money else 0 end)
+		from pays a 
+		left join pay b on a.noa=b.noa
+		left join tgg c on b.tggno=c.noa
+		where (a.noa in (select noa from pays xx where (xx.tggno between @t_btggno and @t_etggno) and (xx.paymon between @t_bmon and @t_emon)))
+		and (isnull(a.checkno,'')='')
+		and (isnull(a.money,0)!=0)
+		group by b.tggno,c.comp,b.datea
+
+	-------處理支票
+	declare @xtggno nvarchar(50)
+	declare @xcomp nvarchar(max)
+	declare @xdatea nvarchar(20)
+	declare @xcheckno nvarchar(50)
+	declare @xbank nvarchar(100)
+	declare @xmoney float
+	declare @xindate nvarchar(20)
+	declare @tmpIdno int
+	declare cursor_table1 cursor for
+		select
+			b.tggno,c.comp,b.datea,a.checkno,a.bank,a.money,a.indate
+		from pays a 
+		left join pay b on a.noa=b.noa
+		left join tgg c on b.tggno=c.noa
+		where (a.noa in (select noa from pays xx where (xx.tggno between @t_btggno and @t_etggno) and (xx.paymon between @t_bmon and @t_emon)))
+		and (isnull(a.checkno,'')!='')
+		and (isnull(a.money,0)!=0)
+	open cursor_table1
+	fetch next from cursor_table1
+	into @xtggno,@xcomp,@xdatea,@xcheckno,@xbank,@xmoney,@xindate
+	while(@@FETCH_STATUS <> -1)
+	begin
+		set @tmpIdno = -1
+		select top 1 @tmpIdno=idno from @tmp where tggno=@xtggno and comp=@xcomp and noa=@xdatea and kindsort=2 and gno=9 and isnull(checkno,'')=''
+		if(isnull(@tmpIdno,-1) != -1)
+		begin
+			update @tmp set checkno=@xcheckno,bank=@xbank,money=@xmoney,date2=@xindate where idno=@tmpIdno
+		end
+		else
+		begin
+			insert into @tmp(gno,kindsort,tggno,comp,noa,checkno,bank,money,date2)
+				select 9,2,@xtggno,@xcomp,@xdatea,@xcheckno,@xbank,@xmoney,@xindate
+		end
+		fetch next from cursor_table1
+		into @xtggno,@xcomp,@xdatea,@xcheckno,@xbank,@xmoney,@xindate
+	end
+	close cursor_table1
+	deallocate cursor_table1
+
+	insert into @tmp(gno,kindsort,tggno,comp,noa,tot01,tot02,tot03,tot04,money,tot05)
+		select
+			10,2,tggno,comp,char(255),sum(isnull(tot01,0)),sum(isnull(tot02,0)),sum(isnull(tot03,0)),sum(isnull(tot05,0)),sum(isnull(money,0)),
+			sum(isnull(tot01,0)+isnull(tot02,0)+isnull(tot03,0)+isnull(tot04,0)+isnull(tot05,0)-isnull(tot06,0)+isnull(money,0))
+		from @tmp
+		where gno=9 and kindsort=2
+		group by tggno,comp
+end
+if(@t_invo='Y')
+begin
+	insert into @tmp(gno,kindsort,tggno,comp,spec,csize,datea,noa,money,tax,memo)
+		select
+			12,3,a.tggno,b.comp,dbo.qleft(a.comp,30),dbo.qleft(a.serial,8),a.datea,a.noa,a.money,a.tax,dbo.qleft(a.address,26)
+		from rc2a a
+		left join tgg b on a.tggno=b.noa
+		where (a.tggno between @t_btggno and @t_etggno)
+		and (a.mon between @t_bmon and @t_emon)
+
+	insert into @tmp(gno,kindsort,tggno,comp,noa,money,tax)
+		select
+			13,3,tggno,comp,char(255),sum(money),sum(tax)
+		from @tmp
+		where gno=12 and kindsort=3
+		group by tggno,comp
+end
+
+update a set pageno=ceiling(rx/@t_pageLine)+1 from (select ROW_NUMBER()over(partition by tggno,kindsort order by noa,gno,idno)-1 rx,pageno from @tmp) a
+insert into @tmp(gno,xid,pageno,kindsort,tggno,comp,noa,coin,memo)
+	select 1,min(xid)-1,pageno,kindsort,tggno,comp,'',coin,'廠商請款明細表 標題列' from @tmp where kindsort=1 group by pageno,kindsort,tggno,comp,coin
+insert into @tmp(gno,xid,pageno,kindsort,tggno,comp,noa,coin,memo)
+	select 8,min(xid)-1,pageno,kindsort,tggno,comp,'',coin,'廠商付款資料明細 標題列' from @tmp where kindsort=2 group by pageno,kindsort,tggno,comp,coin
+insert into @tmp(gno,xid,pageno,kindsort,tggno,comp,noa,coin,memo)
+	select 11,min(xid)-1,pageno,kindsort,tggno,comp,'',coin,'廠商開立發票明細 標題列' from @tmp where kindsort=3 group by pageno,kindsort,tggno,comp,coin
+
+----跳頁
+insert into @tmp(gno,pageno,kindsort,tggno,comp,noa)
+	select 14,pageno,kindsort,tggno,comp,char(255) from @tmp group by pageno,kindsort,tggno,comp
+select
+	gno,xid,pageno,kindsort,tggno,comp,mon,datea,
+	typea ty,
+	coin,noa,noq,productno,product,spec,csize,
+	dbo.getComma(mount,0) mo1,
+	dbo.getComma(weight,1) weight,
+	unit,
+	dbo.getComma(price,case when gno in (4) and isnull(coin,'')='' then 0 else 2 end) price,
+	dbo.getComma(money,case when isnull(coin,'')='' then 0 else 2 end) money,
+	dbo.getComma(tax,case when isnull(coin,'')='' then 0 else 2 end) tax,
+	dbo.getComma(total,case when isnull(coin,'')='' then 0 else 2 end) total,
+	dbo.getComma(a.dime,2) dime,
+	dbo.getComma(a.width,1) width,
+	dbo.getComma(a.lengthb,2) lengthb,
+	memo,
+	case when (cast(a.gno as int) between 1 and 7) then N'廠商請款明細表'
+		 when (cast(a.gno as int) between 8 and 10) then N'廠商付款資料明細'
+		 when (cast(a.gno as int) between 11 and 13) then N'廠商開立發票明細'
+	end xtitle,
+	dbo.getComma(tot01,case when gno in (9,10) and isnull(coin,'')='' then 0 else 2 end) tot01,
+	dbo.getComma(tot02,case when gno in (9,10) and isnull(coin,'')='' then 0 else 2 end) tot02,
+	dbo.getComma(tot03,case when gno in (9,10) and isnull(coin,'')='' then 0 else 2 end) tot03,
+	dbo.getComma(tot04,case when gno in (9,10) and isnull(coin,'')='' then 0 else 2 end) tot04,
+	dbo.getComma(tot05,case when gno in (9,10) and isnull(coin,'')='' then 0 else 2 end) tot05,
+	dbo.getComma(tot06,case when gno in (9,10) and isnull(coin,'')='' then 0 else 2 end) tot06,
+	checkno,
+	bank,
+	date2
+from @tmp a
+order by a.tggno,a.kindsort,a.pageno,a.noa,a.gno,a.idno;
+-------------------------------------------------------------------------------------------------------
+z_rc2_awb02:--z_rc2_awb02
+declare @t_bydate nvarchar(50) = case when '#non'=[10] then '' else [10] end
+declare @t_eydate nvarchar(50) = case when '#non'=[11] then char(255) else [11] end
+declare @tmp table(
+	gno nvarchar(10),
+	typea nvarchar(10),
+	datea nvarchar(20),
+	noa nvarchar(50),
+	noq nvarchar(10),
+	comp nvarchar(100),
+	product nvarchar(50),
+	spec nvarchar(50),
+	dime float,
+	width float,
+	lengthb float,
+	mount float,
+	mweight float,
+	aweight float,
+	price float,
+	money float,
+	total float,
+	xtotal float,
+	unit nvarchar(50),
+	memo nvarchar(max)
+)
+
+insert into @tmp(gno,typea,datea,noa,noq,comp,product,spec,dime,width,lengthb,mount,mweight,aweight,price,total,xtotal,unit,memo)
+select
+	'0',case when b.typea='1' then '進' else '退' end,b.datea,a.noa,a.noq,dbo.qleft(b.tgg,8),
+	dbo.qleft(a.product,10),
+	dbo.qleft(a.spec,10),
+	a.dime,a.width,a.lengthb,a.mount,a.mweight,a.weight,a.price,
+	case when isnull(a.total,0)=0 then null else a.total end,case when a.noq=c.noq then b.total else 0 end,
+	a.unit,b.memo
+from view_rc2s a
+left join view_rc2 b on a.noa=b.noa
+outer apply(select min(noq) noq from view_rc2s xx where xx.noa=a.noa) c
+where (b.datea between @t_bydate and @t_eydate)
+
+insert into @tmp(gno,datea,noa,noq,memo)
+	select '1',datea,noa,char(255),memo from @tmp where ltrim(rtrim(isnull(memo,''))) != '' group by datea,noa,memo
+
+insert into @tmp(gno,datea,money,total)
+	select '2',char(255),round(sum(case when typea='進'then xtotal else 0 end),0),round(sum(case when typea!='進'then xtotal else 0 end),0) from @tmp
+
+select
+	gno,
+    typea ta,
+    datea a01,
+    noa,
+    noq,
+    comp cop,
+    product,spec,
+	replace(dbo.getComma(dime,2),',','') dime,
+	replace(dbo.getComma(width,1),',','') width,
+	replace(dbo.getComma(lengthb,1),',','') lengthb,
+	dbo.getComma(mount,0) mount,
+	dbo.getComma(mweight,1) mweight,
+	dbo.getComma(aweight,1) aweight,
+	dbo.getComma(price,2) price,
+	dbo.getComma(money,0) money,
+	dbo.getComma(total,0) total,
+	dbo.qleft(unit,2) unit,
+	N'備註：' + dbo.qleft(memo,150) memo
+from @tmp
+order by datea,noa,noq;
+--------------------------------------------------------------------------------------------------------------
+z_rc2_awb03:--z_rc2_awb03
+declare @t_bmon nvarchar(50) = case when '#non'=[4] then '' else [4] end
+declare @t_emon nvarchar(50) = case when '#non'=[5] then char(255) else [5] end
+declare @tmp table(
+	gno nvarchar(10),
+	mon nvarchar(20),
+	money float,
+	tax float,
+	total float
+)
+insert into @tmp(gno,mon,money,tax,total)
+select
+	'0',a.mon,
+	sum(a.money*case when a.typea='1' then 1 else -1 end),
+	sum(a.tax*case when a.typea='1' then 1 else -1 end),
+	sum(a.total*case when a.typea='1' then 1 else -1 end)
+from view_rc2 a
+where (a.mon between @t_bmon and @t_emon)
+group by a.mon
+
+insert into @tmp(gno,money,tax,total)
+	select '1',sum(money),sum(tax),sum(total) from @tmp
+
+select
+	gno,mon,
+	dbo.getComma(money,0) money,
+	dbo.getComma(tax,0) tax,
+	dbo.getComma(total,0) total
+from @tmp
+order by gno,mon
+;
+-------------------------------------------------------------------------------------------------------------
+z_rc2_awb04:--z_rc2_awb04
+declare @t_btggno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_etggno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+declare @t_bydate nvarchar(50) = case when '#non'=[10] then '' else [10] end
+declare @t_eydate nvarchar(50) = case when '#non'=[11] then char(255) else [11] end
+declare @tmp table(
+	gno nvarchar(10),
+	tggno nvarchar(20),
+	comp nvarchar(max),
+	datea nvarchar(20),
+	pno nvarchar(50),
+	product nvarchar(50),
+	spec nvarchar(100),
+	dime float,
+	width float,
+	lengthb float,
+	mount float,
+	mweight float,
+	weight float,
+	cweight float,
+	price float,
+	unit nvarchar(20),
+	total float
+)
+insert into @tmp(gno,tggno,comp,datea,pno,product,spec,dime,width,lengthb,mount,mweight,weight,cweight,price,unit,total)
+select
+	'0',b.tggno,c.comp,b.datea,a.productno,a.product,a.spec,a.dime,a.width,a.lengthb,a.mount,a.mweight,a.weight,
+	isnull(a.weight,0)*case when b.typea='2' then -1 else 1 end,
+	a.price,a.unit,
+	isnull(a.total,0)*case when b.typea='2' then -1 else 1 end
+from view_rc2s a
+left join view_rc2 b on a.noa=b.noa
+left join tgg c on b.tggno=c.noa
+where (b.tggno between @t_btggno and @t_etggno)
+and (b.datea between @t_bydate and @t_eydate)
+
+insert into @tmp(gno,tggno,comp,pno,product,datea,price)
+	select
+		'1',tggno,comp,pno,char(255),char(255),
+		sum(isnull(total,0))/case when sum(isnull(cweight,0))=0 then 1 else sum(isnull(cweight,0)) end
+	from @tmp
+	group by tggno,comp,pno
+	having sum(isnull(total,0))>0
+
+insert into @tmp(gno,tggno,comp,pno,product,datea)
+	select '2',tggno,comp,char(255),char(255),char(255) from @tmp group by tggno,comp
+select
+	gno,tggno,comp,datea,pno,
+	dbo.qleft(product,10) product,
+	dbo.qleft(spec,10) spec,
+	replace(dbo.getComma(dime,2),',','') dime,
+	replace(dbo.getComma(width,2),',','') width,
+	replace(dbo.getComma(lengthb,1),',','') lengthb,
+	dbo.getComma(mount,0) mount,
+	dbo.getComma(mweight,2) mweight,
+	dbo.getComma(weight,2) aweight,
+	dbo.getComma(price,2) price,
+	dbo.qleft(unit,2) unit,
+	dbo.getComma(total,0) total
+from @tmp
+order by tggno,pno,datea,product,spec,dime,width,lengthb,price;

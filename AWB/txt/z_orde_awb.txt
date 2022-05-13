@@ -1,0 +1,117 @@
+z_orde_awb01:--z_orde_awb01
+declare @t_bcustno nvarchar(50) = case when '#non' = [2] then '' else [2] end 
+declare @t_ecustno nvarchar(50) = case when '#non' = [3] then char(255) else [3] end 
+declare @t_bproductno nvarchar(50) = case when '#non' = [4] then '' else [4] end 
+declare @t_eproductno nvarchar(50) = case when '#non' = [5] then char(255) else [5] end 
+declare @t_bdatea nvarchar(50) = case when '#non' = [6] then '' else [6] end 
+declare @t_edatea nvarchar(50) = case when '#non' = [7] then char(255) else [7] end
+declare @t_vcced nvarchar(10) = case when '#non' = [8] then '' else [8] end 
+	begin try
+		IF Object_id('tempdb..#temp') IS NOT NULL
+		BEGIN
+			DROP TABLE #temp
+		END
+	end try
+	begin catch
+	end catch
+	create table #temp(
+		idno int identity(1,1),
+		gno nvarchar(10),
+		noa nvarchar(50),
+		no2 nvarchar(20),
+		comp nvarchar(100),
+		productno nvarchar(50),
+		product nvarchar(50),
+		spec nvarchar(100),
+		csize nvarchar(max),
+		mount float,
+		oweight float,
+		vccno nvarchar(50),
+		vccnoq nvarchar(20),
+		vweight float,
+		datea nvarchar(20),
+		memo nvarchar(max)
+	)
+	insert into #temp(gno,noa,no2,comp,productno,product,spec,csize,mount,oweight,vweight,datea,memo)
+	select
+		'0',a.noa,a.no2,dbo.qleft(b.comp,8),a.productno,dbo.qleft(a.product,8),dbo.qleft(a.spec,8),
+		replace(dbo.getComma(a.dime,2),',','') + ' x ' + replace(dbo.getComma(a.width,1),',','') + case when isnull(a.lengthb,0) != 0 then ' x ' + replace(dbo.getComma(a.lengthb,1),',','') else '' end,
+		a.mount,a.weight,c.weight,b.datea,a.memo
+	from view_ordes a
+	left join view_orde b on a.noa=b.noa
+	outer apply(select sum(weight) weight from view_vccs xx where xx.ordeno=a.noa and xx.no2=a.no2) c
+	where (b.odate between @t_bdatea and @t_edatea)
+	and (b.custno between @t_bcustno and @t_ecustno)
+	and (a.productno between @t_bproductno and @t_eproductno)
+	and ((len(@t_vcced)=0 and isnull(a.enda,0)=0) or @t_vcced='Y')
+	and (isnull(b.casetype,'')='訂購')
+	and (isnull(a.cancel,0)=0)
+	order by a.noa,a.productno
+
+	
+
+	insert into #temp(gno,noa,no2,comp,productno,product,spec,csize,mount,oweight,vweight,datea,memo)
+	select
+		'1',noa,no2,comp,productno,product,spec,csize,mount,oweight,vweight,datea,memo
+	from #temp
+	where ltrim(rtrim(memo)) != ''
+
+	insert into #temp(gno,noa,no2,comp,productno,oweight,vweight,vccno,vccnoq,datea)
+		select
+			'3',a.noa,a.no2,a.comp,a.productno,a.oweight,b.weight,b.noa,b.noq,b.datea
+		from #temp a
+		left join view_vccs b on a.noa=b.ordeno and a.no2=b.no2
+		where isnull(b.noa,'') != ''
+		and a.gno='0'
+		order by b.noa,b.noq
+
+	select
+		case when a.idno=b.midno then
+			case when a.gno='0' then '4'
+				 when a.gno='1' then '2'
+				 when a.gno='3' then '5'
+			end
+		else a.gno end gno,
+		a.noa,a.no2,a.comp,a.productno,
+		dbo.qleft(a.product,8) product,
+		dbo.qleft(a.spec,7) spec,
+		replace(a.csize,' ','') csize,
+		a.mount,a.oweight,a.vccno,a.vccnoq,
+		isnull(a.vweight,0) vweight,
+		right(a.datea,5) datea,
+		N'備註：' + a.memo memo
+	from #temp a
+	outer apply(select max(idno) midno from #temp xx where xx.noa=a.noa) b
+	order by a.noa,a.productno,a.no2,a.gno,a.vccno,a.vccnoq
+
+	begin try
+		IF Object_id('tempdb..#temp') IS NOT NULL
+		BEGIN
+			DROP TABLE #temp
+		END
+	end try
+	begin catch
+	end catch
+;
+-----------------------------------------------------------------------------
+z_orde_awb02:--z_orde_awb02
+declare @t_bdate nvarchar(50) = case when '#non' = [9] then '' else [9] end 
+declare @t_edate nvarchar(50) = case when '#non' = [10] then char(255) else [10] end
+select
+	'0' gno,a.noa,a.no2,
+	dbo.qleft(b.comp,8) comp,
+	dbo.qleft(a.product,10) product,
+	dbo.qleft(a.spec,8) spec,
+	replace(dbo.getComma(a.dime,2),',','') dime,
+	replace(dbo.getComma(a.width,2),',','') width,
+	replace(dbo.getComma(a.lengthb,1),',','') lengthb,
+	case when isnull(a.mount,0)=0 then null else dbo.getComma(a.mount,0) end mount,
+	dbo.getComma(a.weight,1) weight,
+	a.unit,
+	dbo.getComma(a.price,2) price,
+	dbo.getComma(a.total,0) total
+from view_ordes a
+left join view_orde b on a.noa=b.noa
+where (b.odate between @t_bdate and @t_edate)
+and (isnull(b.casetype,'') in ('詢價','報價'))
+order by a.noa,a.no2;

@@ -1,0 +1,22 @@
+declare @t_uno nvarchar(100) = [1]
+select
+	a.*
+from (
+	select
+		a.uno,a.productno,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,a.mount,a.weight,isnull(b.emount,a.mount) emount,isnull(b.eweight,a.weight) eweight
+	from view_rc2s a
+	left join uccy b on a.uno=b.uno
+	where ((a.uno=@t_uno) or (isnull(@t_uno,'') = '' and isnull(b.eweight,a.weight)>0)) and len(a.uno)>2
+	union all
+	select
+		a.uno,a.productno,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,a.mount,a.weight,isnull(b.emount,a.mount) emount,isnull(b.eweight,a.weight) eweight
+	from view_inas a
+	left join uccy b on a.uno=b.uno
+	where ((a.uno=@t_uno) or (isnull(@t_uno,'') = '' and isnull(b.eweight,a.weight)>0)) and len(a.uno)>2
+	union all
+	select
+		a.bno,a.productno,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,a.mount,a.weight,isnull(b.emount,a.mount) emount,isnull(b.eweight,a.weight) eweight
+	from view_cuts a
+	left join uccy b on a.bno=b.uno
+	where ((a.bno=@t_uno) or (isnull(@t_uno,'') = '' and isnull(b.eweight,a.weight)>0)) and len(a.bno)>2
+) a

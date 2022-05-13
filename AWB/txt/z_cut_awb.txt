@@ -1,0 +1,151 @@
+z_cut_awb01:--z_cut_awb01
+declare @t_bdate nvarchar(10) = case when '#non'=[2] then '' else [2] end
+declare @t_edate nvarchar(10) = case when '#non'=[3] then char(255) else [3] end
+declare @t_bnoa nvarchar(30) = case when '#non'=[7] then '' else [7] end
+declare @t_enoa nvarchar(30) = case when '#non'=[8] then char(255) else [8] end
+declare @t_table nvarchar(20) = case when '#non'=[9] then '' else [9] end
+declare @t_uno nvarchar(50) = case when '#non'=[10] then '' else [10] end
+
+    declare @tmp table(
+		gno nvarchar(3),
+		noa nvarchar(30),
+		noq nvarchar(10),
+		tgg nvarchar(50),
+		datea nvarchar(10),	
+		uno nvarchar(200),
+		place nvarchar(50),
+		product nvarchar(100),
+		size nvarchar(100),
+		weight1 float,
+		weight2 float,
+		mount float,
+		worker nvarchar(50)
+	)
+
+	if(@t_table='進貨' or @t_table='')
+	begin
+		insert @tmp 
+		select '0',a.noa,b.noq,a.tggno,a.datea,b.uno,'',b.product+' '+b.spec
+			,replace(dbo.getComma(b.dime,2)+'x'+dbo.getComma(b.width,1)+'x'+b.style,',','')--+dbo.getComma(b.lengthb,1),',','')
+			,b.mweight,b.weight,b.mount,''
+		from view_rc2 a
+		left join view_rc2s b on a.noa=b.noa
+		where a.datea between @t_bdate and @t_edate
+		and a.noa between @t_bnoa and @t_enoa
+		and (b.uno=@t_uno or @t_uno='')
+	end
+	if(@t_table='裁剪' or @t_table='')
+	begin
+		insert @tmp 
+		select '0',a.noa,b.noq,'',a.datea,b.uno,'',a.product+' '+a.spec
+			,replace(dbo.getComma(a.dime,2)+'x'+dbo.getComma(a.width,1)+'x'+b.style,',','')--+dbo.getComma(a.lengthb,1),',','')
+			,b.hweight,b.weight,b.mount,''
+		from view_cut a
+		left join view_cuts b on a.noa=b.noa
+		where isnull(b.bno,'')!=''
+		and a.datea between @t_bdate and @t_edate
+		and a.noa between @t_bnoa and @t_enoa
+		and (replace(b.bno,' ','')=@t_uno or @t_uno='')
+	end
+
+	select dbo.getComma(weight1,-1) weight1,dbo.getComma(weight2,-1) weight2,* from @tmp
+
+
+;
+
+--------------------------------------------------------------------------
+z_cut_awb02:--z_cut_awb02
+declare @t_bdate nvarchar(10) = case when '#non'=[2] then '' else [2] end
+declare @t_edate nvarchar(10) = case when '#non'=[3] then char(255) else [3] end
+declare @t_bnoa nvarchar(30) = case when '#non'=[7] then '' else [7] end
+declare @t_enoa nvarchar(30) = case when '#non'=[8] then char(255) else [8] end
+
+	declare @page_count int = 7
+
+	declare @tmp table(
+		gno nvarchar(3),
+		noa nvarchar(30),
+		noq nvarchar(10),
+		rr int,
+		pages int,
+		p_rr int,
+		bno nvarchar(100),
+		mech nvarchar(50),
+		product nvarchar(200),
+		odate nvarchar(10),
+		udate nvarchar(10),
+		place nvarchar(30),
+		bweight float,
+		nweight float,
+		bmemo nvarchar(max),
+		cust nvarchar(50),
+		dd float,
+		ww float,
+		ll float,
+		mount1 float,
+		mount2 float,
+		weight1 float,
+		weight2 float,
+		uno nvarchar(100),
+		need1 nvarchar(30),
+		memo nvarchar(max),
+		worker nvarchar(50),
+		user1 nvarchar(50),
+		user2 nvarchar(50)
+
+	)
+	insert @tmp
+	select '0',a.noa,b.noq,0,0,0,a.uno,a.cuano,
+		a.product+' '+a.spec+' '+replace(dbo.getComma(a.dime,2)+'x'+replace(dbo.getComma(a.width,2),',','')+'x'+case when charindex('板',a.product)>0 then replace(dbo.getComma(a.lengthb,1),',','') else 'Coil' end,',',''),
+		a.datea,a.mon,'',a.eweight,a.gweight,a.memo,b.cust,b.dime,b.width,b.lengthb,b.mount,b.hweight,b.weight,null,b.bno,b.size,b.memo,a.worker,a.tgg,a.cust
+	from view_cut a
+	left join view_cuts b on a.noa=b.noa
+	where a.datea between @t_bdate and @t_edate 
+	and a.noa between @t_bnoa and @t_enoa
+
+	update a set rr=rx from(select ROW_NUMBER()over(partition by noa order by noq)rx,rr from @tmp)a
+
+	update @tmp set pages = ceiling((rr-1)/@page_count)+1
+
+	update a set p_rr=rx from(select ROW_NUMBER()over(partition by noa,pages order by noq)rx,p_rr from @tmp)a
+
+	declare @noa nvarchar(30),@bmemo nvarchar(max),@pages int,@i int,@worker nvarchar(50),@user1 nvarchar(50),@user2 nvarchar(50)
+
+	declare cursor_table cursor for 
+		select noa,bmemo,pages,max(p_rr),worker,user1,user2 from @tmp
+		group by noa,pages,bmemo,worker,user1,user2
+		having max(p_rr)<@page_count
+	open cursor_table 
+	fetch next from cursor_table 
+	into @noa,@bmemo,@pages,@i,@worker,@user1,@user2
+	while(@@FETCH_STATUS <> -1) 
+	begin
+		while(@i<@page_count)
+		begin
+			insert @tmp(gno,noa,noq,rr,pages,bmemo,p_rr,worker,user1,user2)
+			select '1',@noa,'999',999,@pages,@bmemo,@i+1,@worker,@user1,@user2
+			set @i=@i+1
+		end
+		fetch next from cursor_table 
+		into @noa,@bmemo,@pages,@i,@worker,@user1,@user2
+	end 
+	close cursor_table 
+	deallocate cursor_table
+
+
+	insert @tmp(gno,noa,noq,pages,p_rr,memo,worker,user1,user2)
+	select '2',noa,'9999',pages,max(p_rr)+1,bmemo,worker,user1,user2
+	from @tmp
+	group by noa,pages,bmemo,worker,user1,user2
+
+	select 
+	dbo.getComma(dd,2)dd,
+	dbo.getComma(ww,2)ww,
+	case when charindex('板',product)>0 then dbo.getComma(ll,1) else 'Coil' end ll,
+	dbo.getComma(mount2,1)mount2,
+	dbo.getComma(weight1,1)weight1,
+	dbo.getComma(weight2,1)weight2,
+	left(cust,4) cust,
+	* from @tmp
+	order by noa,pages,noq,p_rr
+;	

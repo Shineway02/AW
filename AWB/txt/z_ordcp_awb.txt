@@ -1,0 +1,173 @@
+z_ordcp_awb01:--z_ordcp_awb01
+declare @t_noa nvarchar(50) = case when '#non' = [1] then '' else [1] end
+declare @t_hideprice nvarchar(50) = case when '#non' = 'N' then '' else 'N' end
+declare @tmp table(
+	gno nvarchar(10),
+	typea nvarchar(50),
+	noa nvarchar(50),
+	no2 nvarchar(10),
+	datea nvarchar(20),
+	compa nvarchar(100),
+	tela nvarchar(100),
+	unia nvarchar(50),
+	sales nvarchar(50),
+	date2 nvarchar(20),
+	product nvarchar(50),
+	style nvarchar(50),
+	spec nvarchar(100),
+	dime float,
+	width float,
+	lengthb float,
+	mount float,
+	xunit nvarchar(20),
+	weight float,
+	unib nvarchar(50),
+	price float,
+	memoa nvarchar(max),
+	memob nvarchar(max),
+	compb nvarchar(max),
+	telb nvarchar(100),
+	addrb nvarchar(max),
+	apv nvarchar(50),
+	worker nvarchar(50),
+    memo2 int
+)
+insert into @tmp(gno,typea,noa,no2,datea,compa,tela,unia,sales,date2,product,style,spec,dime,width,lengthb,mount,xunit,weight,unib,price,memoa,memob,compb,telb,addrb,apv,worker,memo2)
+select
+	'0',b.contract,a.noa,a.no2,b.odate,b.tgg,b.tel,b.postname,b.sales,
+	a.indate,a.product,a.style,a.spec,a.dime,a.width,a.lengthb,a.mount,isnull(a.unit2,''),a.weight,a.unit,
+	a.price,b.memo,a.memo,b.cust,b.fax,b.addr2,b.apv,b.worker,b.overrate
+from view_ordcs a
+left join view_ordc b on a.noa=b.noa
+where (a.noa=@t_noa)
+---------------新增空白
+declare @nowLine int = 0
+declare @PageLine int = 8
+select @nowLine = (select count(*) from @tmp)
+set @nowLine = (@nowLine % @PageLine)
+while(@nowLine < @PageLine and @nowLine<>0)
+begin
+	insert into @tmp(gno,typea,noa,no2,datea,compa,tela,unia,sales,memoa,compb,telb,addrb,apv,worker,memo2)
+		select
+			top 1 '1',typea,noa,9999,datea,compa,tela,unia,sales,memoa,compb,telb,addrb,apv,worker,memo2
+		from @tmp
+	set @nowLine = @nowLine+1
+end
+---------------新增空白
+select
+	gno,typea,noa,no2,datea,date2,
+	dbo.qleft(compa,90) compa,
+	dbo.qleft(tela,54) tela,
+	dbo.qleft(unia,4) unia,
+	dbo.qleft(sales,8) sales,
+	dbo.qleft(product,10) product,
+	dbo.qleft(spec,10) spec,
+	replace(dbo.getComma(dime,2),',','') dime,
+	replace(dbo.getComma(width,2),',','') width,
+	replace(case when style='C' then 'C' else dbo.getComma(lengthb,1) end,',','') lengthb,
+	dbo.getComma(mount,0) + dbo.qleft(xunit,2) mount,
+	dbo.getComma(weight,1) weight,
+	dbo.qleft(unib,4) unib,
+	case when @t_hideprice='Y' then null else dbo.getComma(price,2) end price,
+	isnull(apv,'') apv,
+	isnull(worker,'') worker,
+	memoa,
+	memob,
+	'廠商' + typea +'單' xtitle,
+    case when typea in ('訂購','報價') then N'出貨時,請附貨單、發票、材証及環保証明(SGS),謝謝!' else '' end xmemo1,
+    case when memo2=1 then N'　　一、請依納期交貨,材料尺寸、硬度需一致,表面不可有刮痕、變形等不良情形。' else '' end xmemo2,
+    case when memo2=1 then N'　　二、交貨後如發現材料有品質不合、瑕疵、損壞等情況，貴方負責退換。' else '' end xmemo3,
+    case when memo2=1 then N'　　三、請注意公司名稱"滙"(水在外)，發票品名請填中文名稱(勿只填代號)。' else '' end xmemo4,
+	case when isnull(compb,'') != '' or isnull(addrb,'') != '' then N'送貨地址：' else N'　　　　　' end + isnull(compb,'') + ' ' + isnull(telb,'') + ' ' + isnull(addrb,'') xmemo5,
+	case typea when '詢價' then 'FM0711A' when '訂購' then 'FM0707A' when '加工' then 'FM0712A' else '' end isono
+from @tmp
+order by noa,no2;
+---------------------------------------------------------------------------------------------------------------------
+z_ordcp_awb02:--z_ordcp_awb02
+declare @t_noa nvarchar(50) = case when '#non' = [1] then '' else [1] end
+declare @tmp table(
+	pageno int,
+	typea nvarchar(50),
+	gno nvarchar(10),
+	noa nvarchar(50),
+	no2 nvarchar(10),
+	comp nvarchar(max),
+	tel nvarchar(max),
+	datea nvarchar(20),
+	product nvarchar(max),
+	style nvarchar(20),
+	dime float,
+	width float,
+	lengthb float,
+	mount float,
+	unit2 nvarchar(50),
+	weight float,
+	unit nvarchar(50),
+	price float,
+	atotal float,
+	money float,
+	tax float,
+	btotal float,
+	m1 nvarchar(max),
+	m2 nvarchar(max),
+	m3 nvarchar(max),
+	m4 nvarchar(max),
+	m5 nvarchar(max),
+	m6 nvarchar(max),
+	ci nvarchar(10)
+)
+insert into @tmp(gno,typea,noa,no2,comp,tel,datea,product,style,dime,width,lengthb,mount,unit2,weight,unit,price,atotal,money,tax,btotal,m1,m2,m3,ci)
+select
+	'0',b.contract,a.noa,a.no2,b.tgg,b.tel,b.odate,isnull(a.product,'') + ' ' + isnull(a.spec,''),a.style,
+	a.dime,a.width,a.lengthb,a.mount,a.unit2,a.weight,a.unit,a.price,a.total,b.money,b.tax,b.total,
+	b.addr,b.ordbno,b.paytype,
+	case when isnull(b.atax,0)=1 then 'US' else '' end
+from view_ordcs a
+left join view_ordc b on a.noa=b.noa
+where (a.noa=@t_noa)
+---------------新增空白
+declare @nowLine int = 0
+declare @PageLine int = 12
+select @nowLine = (select count(*) from @tmp)
+set @nowLine = (@nowLine % @PageLine)
+while(@nowLine < @PageLine and @nowLine<>0)
+begin
+	insert into @tmp(gno,typea,noa,no2,comp,tel,datea,money,tax,btotal,m1,m2,m3,m4,m5,m6,ci)
+		select
+			top 1 '1',typea,noa,'9998',comp,tel,datea,money,tax,btotal,m1,m2,m3,m4,m5,m6,ci
+		from @tmp
+	set @nowLine = @nowLine+1
+end
+---------------新增空白
+update a set pageno=ceiling(rx/@PageLine)+1 from (select ROW_NUMBER()over(order by noa,no2)-1 rx,pageno from @tmp) a
+
+insert into @tmp(gno,typea,pageno,noa,no2,comp,tel,datea,money,tax,btotal,m1,m2,m3,m4,m5,m6,ci)
+	select '2',typea,pageno,noa,'9999',comp,tel,datea,money,tax,btotal,m1,m2,m3,m4,m5,m6,ci from @tmp group by typea,pageno,noa,comp,tel,datea,money,tax,btotal,m1,m2,m3,m4,m5,m6,ci
+select
+	gno,pageno,noa,no2,
+	dbo.qleft(comp,54) comp,
+	dbo.qleft(tel,54) tel,
+	datea,
+	dbo.qleft(product,26) product,
+	case when isnull(dime,0)=0 and isnull(width,0)=0 and isnull(lengthb,0)=0 then '' else replace(dbo.getComma(dime,2),',','') end dime,
+	case when isnull(dime,0)=0 and isnull(width,0)=0 and isnull(lengthb,0)=0 then '' else replace(dbo.getComma(width,2),',','') end width,
+	case when isnull(dime,0)=0 and isnull(width,0)=0 and isnull(lengthb,0)=0 then '' else replace(dbo.getComma(lengthb,1),',','') end lengthb,
+	case when isnull(dime,0)=0 and isnull(width,0)=0 and isnull(lengthb,0)=0 then '' else 'x' end yx,
+	dbo.getComma(isnull(mount,0),0) + dbo.qleft(isnull(unit2,''),2) mount,
+	dbo.getComma(case when isnull(weight,0)=0 and gno='0' then null else weight end,1) weight,
+	dbo.qleft(unit,4) unit,
+	dbo.getComma(case when isnull(price,0)=0 and gno='0' then null else price end,2) price,
+	dbo.getComma(case when isnull(atotal,0)=0 and gno='0' then null else atotal end,case when isnull(ci,'') != '' then 2 else 0 end) atotal,
+	dbo.getComma(case when isnull(money,0)=0 and gno='0' then null else money end,case when isnull(ci,'') != '' then 2 else 0 end) money,
+	dbo.getComma(case when isnull(tax,0)=0 and gno='0' then null else tax end,case when isnull(ci,'') != '' then 2 else 0 end) tax,
+	dbo.getComma(case when isnull(btotal,0)=0 and gno='0' then null else btotal end,case when isnull(ci,'') != '' then 2 else 0 end) btotal,
+	dbo.qleft(m1,85) m1,
+	dbo.qleft(m2,85) m2,
+	dbo.qleft(m3,85) m3,
+	dbo.qleft(m4,85) m4,
+	dbo.qleft(m5,85) m5,
+	replace(m6,'chr(10)','<br>') m6,
+	case when isnull(price,0)=0 and gno='0' then null else ci end ci,
+	'廠商'+typea+'單' xtitle
+from @tmp
+order by noa,pageno,no2;

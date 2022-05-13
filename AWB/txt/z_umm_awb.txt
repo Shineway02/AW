@@ -1,0 +1,264 @@
+z_umm_awb01:--z_umm_awb01 
+declare @t_bcustno nvarchar(50) = case when '#non'=[2] then '' else [2] end
+declare @t_ecustno nvarchar(50) = case when '#non'=[3] then char(255) else [3] end
+declare @t_mon nvarchar(20) = case when '#non'=[4] then '' else [4] end
+begin try
+	IF Object_id('tempdb..#tmp') IS NOT NULL
+	BEGIN
+		DROP TABLE #tmp
+	END
+end try
+begin catch
+end catch
+create table #tmp(
+	idno int identity(1,1),
+	idno2 int,
+	gno nvarchar(20),
+	custno nvarchar(50),
+	comp nvarchar(100),
+	unstr nvarchar(max),
+	mon1 nvarchar(50),
+	money1 float,
+	mon2 nvarchar(50),
+	money2 float,
+	unpay float,
+	sale float,
+	tax float,
+	totsale float,
+	pay float,
+	total float,
+	primary key(idno)
+)
+create index cust on #tmp(custno)
+insert into #tmp(gno,custno,comp,unstr,unpay,sale,tax,totsale,pay,total)
+	select 
+		'0',a.noa,
+		dbo.qleft(a.comp,8),
+		stuff((select ','+replace(mon,'/','年')+'月'+'@'+replace(dbo.getComma(unpay,0),',','') from cust_2s xx where xx.noa=a.noa and isnull(xx.unpay,0) != 0 and mon<@t_mon FOR XML PATH('')),1,1,''),
+		isnull((select sum(unpay) from cust_2s xx where xx.noa=a.noa and isnull(xx.unpay,0) != 0 and mon<@t_mon),0),
+		isnull(c.sale,0),isnull(c.tax,0),isnull(c.totsale,0),isnull(c.pay,0),isnull(c.unpay,0)
+	from cust a
+	left join cust_2s c on a.noa=c.noa and c.mon=@t_mon
+	where (a.noa between @t_bcustno and @t_ecustno)
+
+update #tmp set total = isnull(total,0)+isnull(unpay,0)
+delete from #tmp where isnull(unstr,'')='' and sale=0 and tax=0 and totsale=0 and pay=0 and total=0
+
+declare @xidno int
+declare @xcustno nvarchar(50)
+declare @xunstr nvarchar(max)
+declare @xn nvarchar(50)
+declare @xitem nvarchar(100)
+declare @xmaxidno int
+----處理未收明細
+declare cursor_table1 cursor for
+	select custno,unstr from #tmp where isnull(unstr,'') != '' order by custno
+open cursor_table1
+fetch next from cursor_table1
+into @xcustno,@xunstr
+while(@@FETCH_STATUS <> -1)
+begin
+	declare cursor_table2 cursor for
+		select ROW_NUMBER()over(order by n),n,item from dbo.fnSplit(@xunstr) order by n
+	open cursor_table2
+	fetch next from cursor_table2
+	into @xidno,@xn,@xitem
+	while(@@FETCH_STATUS <> -1)
+	begin
+		if(@xidno=1)
+		begin
+			update #tmp set mon1=@xn,money1=cast(@xitem as float) where custno=@xcustno
+		end
+		if(@xidno=2)
+		begin
+			update #tmp set mon2=@xn,money2=cast(@xitem as float) where custno=@xcustno
+		end
+		if(@xidno>2)
+		begin
+			if(@xidno%2=1)
+			begin
+				insert into #tmp(gno,custno,comp,mon1,money1)
+					select
+						'2',custno,comp,@xn,cast(@xitem as float)
+					from #tmp where custno=@xcustno and gno='0'
+			end
+			else
+			begin
+				update a set a.mon2=@xn,a.money2=cast(@xitem as float)
+				from #tmp a
+				outer apply(select max(idno) idno from #tmp xx where xx.custno=a.custno and gno='2') b
+				where custno=@xcustno and a.idno=b.idno
+			end
+		end
+		fetch next from cursor_table2
+		into @xidno,@xn,@xitem
+	end
+	close cursor_table2
+	deallocate cursor_table2
+	fetch next from cursor_table1
+	into @xcustno,@xunstr
+end
+close cursor_table1
+deallocate cursor_table1
+
+
+insert into #tmp(gno,custno,unpay,sale,tax,totsale,pay,total)
+	select '4',char(255),sum(unpay),sum(sale),sum(tax),sum(totsale),sum(pay),sum(total) from #tmp where gno='0'
+update a set idno2=rx from (select ROW_NUMBER()over(order by custno,gno,idno) rx,idno2 from #tmp where gno='0')a
+
+if(reverse('r_userno') <> 'onresu_r')
+begin
+	declare @w_hidePrice int = 0
+	declare @w_q_name nvarchar(max)='[1]'
+	if((select count(*) from authority a left join nhpe b on a.sssno=b.noa where (a.price_show=1 or b.rank>=8) and upper(a.sssno)=upper('r_userno') and upper(a.noa)=upper(@w_q_name)) = 0)
+	begin
+		set @w_hidePrice = 1
+	end
+	if(@w_hidePrice = 1)
+	begin
+		update #tmp set money1=null,money2=null,unpay=null,sale=null,tax=null,totsale=null,pay=null,total=null
+	end
+end
+else
+begin
+	print 'Server未支援帶入使用者編號'
+end
+
+select
+	idno,
+	idno2 rr,
+	case when a.gno='0' and b.counta>1 then '1'
+		 when a.gno='2' and b.midno=a.idno then '3'
+	else a.gno end gno,
+	custno,comp,
+    mon1,
+    dbo.getComma(money1,0) money1,
+    mon2,
+    dbo.getComma(money2,0) money2,
+    dbo.getComma(unpay,0) unpay,
+    dbo.getComma(sale,0) sale,
+    dbo.getComma(tax,0) tax,
+    dbo.getComma(totsale,0) totsale,
+    dbo.getComma(pay,0) pay,
+    dbo.getComma(total,0) total
+from #tmp a
+outer apply(select count(*) counta,max(idno) midno from #tmp xx where a.custno=xx.custno) b
+order by a.custno,a.gno,a.idno
+
+begin try
+	IF Object_id('tempdb..#tmp') IS NOT NULL
+	BEGIN
+		DROP TABLE #tmp
+	END
+end try
+begin catch
+end catch;
+--------------------------------------------------------------------------------------------------------------------
+z_umm_awb02:--z_umm_awb02
+declare @t_bdate nvarchar(50) = case when '#non'=[5] then '' else [5] end
+declare @t_edate nvarchar(50) = case when '#non'=[6] then char(255) else [6] end
+declare @tmp table(
+	idno int identity(1,1),
+	gno int,
+	custno nvarchar(50),
+	comp nvarchar(100),
+	sno nvarchar(50),
+	somp nvarchar(100),
+	datea nvarchar(20),
+	money float,
+	tot01 float,
+	tot02 float,
+	tot03 float,
+	tot04 float,
+	tot05 float,
+	tot06 float,
+	checkno nvarchar(50),
+	bank nvarchar(100),
+	date2 nvarchar(20)
+)
+insert into @tmp(gno,custno,comp,sno,somp,datea,tot01,tot02,tot03,tot04,tot05,tot06)
+	select
+		0,b.custno,b.comp,b.custno,b.comp,b.datea,
+		sum(case when isnull(a.acc2,'')=N'現金' then a.money else 0 end),
+		sum(case when isnull(a.acc2,'')=N'匯款' then a.money else 0 end),
+		sum(case when isnull(a.acc2,'')=N'信用狀' then a.money else 0 end),
+		sum(case when isnull(a.acc2,'')=N'同業對扣' then a.money else 0 end),
+		sum(case when isnull(a.acc2,'')=N'折讓金額' then a.money else 0 end),
+		sum(case when isnull(a.acc2,'')=N'補價' then a.money else 0 end)
+	from umms a 
+	left join umm b on a.noa=b.noa
+	where (isnull(a.checkno,'')='')
+	and (isnull(a.money,0)!=0)
+	and (b.datea between @t_bdate and @t_edate)
+	group by b.custno,b.comp,b.datea
+
+-------處理支票
+declare @xcustno nvarchar(50)
+declare @xcomp nvarchar(max)
+declare @xdatea nvarchar(20)
+declare @xcheckno nvarchar(50)
+declare @xbank nvarchar(100)
+declare @xmoney float
+declare @xindate nvarchar(20)
+declare @tmpIdno int
+declare cursor_table1 cursor for
+	select
+		b.custno,b.comp,b.datea,a.checkno,a.bank,a.money,a.indate
+	from umms a 
+	left join umm b on a.noa=b.noa
+	where (isnull(a.checkno,'')!='')
+	and (isnull(a.money,0)!=0)
+	and (b.datea between @t_bdate and @t_edate)
+open cursor_table1
+fetch next from cursor_table1
+into @xcustno,@xcomp,@xdatea,@xcheckno,@xbank,@xmoney,@xindate
+while(@@FETCH_STATUS <> -1)
+begin
+	set @tmpIdno = -1
+	select top 1 @tmpIdno=idno from @tmp where custno=@xcustno and comp=@xcomp and datea=@xdatea and gno=0 and isnull(checkno,'')=''
+	if(isnull(@tmpIdno,-1) != -1)
+	begin
+		update @tmp set checkno=@xcheckno,bank=@xbank,money=@xmoney,date2=@xindate where idno=@tmpIdno
+	end
+	else
+	begin
+		insert into @tmp(gno,custno,comp,sno,somp,datea,checkno,bank,money,date2)
+			select 0,@xcustno,@xcomp,@xcustno,@xcomp,@xdatea,@xcheckno,@xbank,@xmoney,@xindate
+	end
+	fetch next from cursor_table1
+	into @xcustno,@xcomp,@xdatea,@xcheckno,@xbank,@xmoney,@xindate
+end
+close cursor_table1
+deallocate cursor_table1
+
+update a set sno='',somp=''
+from @tmp a
+outer apply(select min(idno) idno from @tmp xx where xx.datea=a.datea and xx.custno=a.custno and xx.comp=a.comp) b
+where a.idno != b.idno
+insert into @tmp(gno,custno,comp,datea,tot01,tot02,tot03,tot04,money,tot05)
+	select '1',char(255),char(255),datea,sum(tot01),sum(tot02),sum(tot03),sum(tot04),sum(money),sum(tot05) from @tmp where gno='0' group by datea
+insert into @tmp(gno,custno,comp,datea,tot01,tot02,tot03,tot04,money,tot05)
+	select
+		2,char(255),char(255),char(255),sum(isnull(tot01,0)),sum(isnull(tot02,0)),sum(isnull(tot03,0)),sum(isnull(tot05,0)),sum(isnull(money,0)),
+		sum(isnull(tot01,0)+isnull(tot02,0)+isnull(tot03,0)+isnull(tot04,0)+isnull(tot05,0)-isnull(tot06,0)+isnull(money,0))
+	from @tmp
+	where gno=0
+select
+	idno,gno,
+	custno,
+	dbo.qleft(comp,8) comp,
+	sno,
+	dbo.qleft(somp,8) somp,
+	right(datea,5) da,
+	dbo.getComma(tot01,0) tot01,
+	dbo.getComma(tot02,0) tot02,
+	dbo.getComma(tot03,0) tot03,
+	dbo.getComma(tot04,0) tot04,
+	dbo.getComma(tot05,0) tot05,
+	dbo.getComma(tot06,0) tot06,
+	checkno,
+	dbo.qleft(bank,8) bank,
+	dbo.getComma(money,0) money,
+	date2
+from @tmp
+order by datea,custno,comp,idno;
