@@ -413,7 +413,10 @@
 					if(r_name=="謝孟賢")
 						t_no=8
 				var t_noa=key_value.substr(0,7)+t_no+key_value.substr(7,3)
-				$('#txt' + bbmKey[0].substr(0, 1).toUpperCase() + bbmKey[0].substr(1)).val(t_noa);
+				if(q_cur==1)
+					$('#txt' + bbmKey[0].substr(0, 1).toUpperCase() + bbmKey[0].substr(1)).val(t_noa);
+				else
+					$('#txt' + bbmKey[0].substr(0, 1).toUpperCase() + bbmKey[0].substr(1)).val(key_value);
 				_btnOk(key_value, bbmKey[0], bbsKey[1], '', 2);
 			}
 
