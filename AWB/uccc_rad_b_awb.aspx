@@ -69,7 +69,15 @@
 					height : "750px"
 				});
 
-				$('#textDime').keyup(function(e) {
+				$('#textBdime').keyup(function(e) {
+					if(e.keyCode>=37 && e.keyCode<=40)
+						return;
+					var tmp=$(this).val();
+					tmp=tmp.match(/\d{1,}\.{0,1}\d{0,}/);
+					$(this).val(tmp);
+				});
+				
+				$('#textEdime').keyup(function(e) {
 					if(e.keyCode>=37 && e.keyCode<=40)
 						return;
 					var tmp=$(this).val();
