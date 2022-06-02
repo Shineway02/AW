@@ -653,6 +653,7 @@ declare @t_ewidth nvarchar(50) = isnull(try_cast(case when '#non'=[18] then '999
 declare @t_bydate nvarchar(50) = case when '#non'=[11] then '' else [11] end
 declare @t_eydate nvarchar(50) = case when '#non'=[12] then char(255) else [12] end
 declare @t_spec nvarchar(max) = case when '#non'=[19] then '' else [19] end
+
 declare @tmp table(
 	gno nvarchar(10),
 	custno nvarchar(50),
