@@ -149,7 +149,7 @@ z_gqb_awb04:--z_gqb_awb04
 	insert @tmp 
 	select '1',a.noa,a.gqbno,a.indate,left(a.indate,3),substring(a.indate,5,2),right(a.indate,2),'開票日'+a.datea,
 	isnull(b.comp,case when a.typea='1' then a.comp when a.typea='2' then a.tcomp else '' end),
-	isnull(b.nick,case when a.typea='1' then a.comp when a.typea='2' then a.tcomp else '' end),
+	isnull(b.nick,case when a.typea='1' then a.comp when a.typea='2' then left(a.tcomp,4) else '' end),
 	a.money,replace(dbo.getComma(a.money,0),',','')
 	from gqb a
 	left join cust b on case when a.typea='1' then a.compno when a.typea='2' then a.tcompno else '' end=b.noa
