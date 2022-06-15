@@ -142,59 +142,95 @@ z_gqb_awb04:--z_gqb_awb04
 		comp nvarchar(80),
 		nick nvarchar(50),
 		money1 float,
-		chmoney nvarchar(100)
+		chmoney1 nvarchar(100),
+		chmoney2 nvarchar(100)
 
 	)
-
 	insert @tmp 
 	select '1',a.noa,a.gqbno,a.indate,left(a.indate,3),substring(a.indate,5,2),right(a.indate,2),'開票日'+a.datea,
 	isnull(b.comp,case when a.typea='1' then a.comp when a.typea='2' then a.tcomp else '' end),
 	isnull(b.nick,case when a.typea='1' then a.comp when a.typea='2' then left(a.tcomp,4) else '' end),
-	a.money,replace(dbo.getComma(a.money,0),',','')
+	a.money,replace(dbo.getComma(a.money,0),',',''),''
 	from gqb a
 	left join cust b on case when a.typea='1' then a.compno when a.typea='2' then a.tcompno else '' end=b.noa
 	where a.gqbno between @t_bnoa and @t_enoa
 
-	declare @unit varchar(50) = '元拾佰仟萬拾佰仟億拾佰仟兆拾佰仟'
-	declare @str varchar(20) = '零壹貳參肆伍陸柒捌玖'
-
-	declare @noa nvarchar(200),@chmoney nvarchar(50),@i int,@mount int,@len int,@chnum nvarchar(200)
+	declare @string nvarchar(max)
+	set @string='壹貳參肆伍陸柒捌玖'
 	
-	declare cursor_table cursor for 
-		select noa,chmoney,len(chmoney)
-		from @tmp
-	open cursor_table 
-	fetch next from cursor_table 
-	into @noa,@chmoney,@mount
-	while(@@FETCH_STATUS <> -1) 
+	declare @gqbno nvarchar(20)
+	declare @money int
+	declare @result nvarchar(max)
+	declare @tmps nvarchar(4)
+	declare @n int
+	declare @cmoney nvarchar(max)
+	
+	declare cursor_table cursor for
+	select gqbno,[money1]  from  @tmp
+	open cursor_table
+	fetch next from cursor_table
+	into @gqbno,@money
+	while(@@FETCH_STATUS <> -1)
 	begin
-		select @i=1,@chnum=''
-		while(@i<=@mount)
+		set @result = ''
+		set @cmoney = CAST(@money as nvarchar)
+		set @n=0
+		
+		if @n=0
 		begin
-			select @len=len(@chmoney)
-
-			if(cast(substring(@chmoney,@len,1)as int)>0)
-				select @chnum=substring(@str,cast(substring(@chmoney,@len,1)as int)+1,1)+substring(@unit,@i,1)+@chnum
-
-			select @i=@i+1,@chmoney=left(@chmoney,len(@chmoney)-1)
+			if(@money=0)
+				set @result = '零元整'
+			else
+				set @result = '元整'
 		end
+		while LEN(@cmoney)>0
+		begin
+			set @tmps = REVERSE(LEFT(REVERSE(@cmoney),4))
+			if @n=1 
+				set @result = '萬'+@result
+			if @n=2
+				set @result = '億'+@result
+			set @result  =  substring(@string,CAST(@tmps as int)%10,1)+@result 
+			---------------------------------------------------------------------
+			if CAST(@tmps as int)=10 or  floor(CAST(@tmps as int)%100/10)!=0
+				set @result = '拾'+@result
+			set @result  =  substring(@string,floor((CAST(@tmps as int)%100)/10),1)+@result 
+			---------------------------------------------------------------------
+			if floor((CAST(@tmps as int)%100)/10)=0 and floor((CAST(@tmps as int)%1000)/100)!=0  and  not(CAST(@tmps as int)%100=0)     
+				set @result = '零'+@result
+			---------------------------------------------------------------------
+			if CAST(@tmps as int)=100 or  floor(CAST(@tmps as int)%1000/100)!=0
+				set @result = '佰'+@result
+			set @result  =  substring(@string,floor((CAST(@tmps as int)%1000)/100),1)+@result 
+			---------------------------------------------------------------------
+			if  floor((CAST(@tmps as int)%1000)/100)=0 and floor((CAST(@tmps as int)%10000)/1000)!=0 and  not(CAST(@tmps as int)%1000=0)    
+				set @result = '零'+@result	
+			---------------------------------------------------------------------
+			if CAST(@tmps as int)=1000 or  floor(CAST(@tmps as int)%10000/1000)!=0
+				set @result = '仟'+@result
+			set @result  =  substring(@string,floor((CAST(@tmps as int)%10000)/1000),1)+@result 
+			if(LEN(@cmoney)<=4)
+			begin
+				set  @cmoney = ''
+			end
+			else
+			begin
+				set @cmoney = REVERSE(SUBSTRING(REVERSE(@cmoney),5,LEN(@cmoney)-4))
+				set @n=@n+1
+			end	
+		end
+		
+		update @tmp set chmoney1=reverse(substring(reverse(convert(nvarchar(15),CONVERT(money,@money),1)),4,12))
+		,chmoney2=@result where gqbno=@gqbno
 
-		update @tmp set chmoney = @chnum+'整' where noa = @noa
-
-		fetch next from cursor_table 
-		into @noa,@chmoney,@mount
-	end 
-	close cursor_table 
+		fetch next from cursor_table
+		into @gqbno,@money
+	end
+	close cursor_table
 	deallocate cursor_table
-
+	
 	if(@t_password!='JAN.')
 		delete @tmp
 		
 	select dbo.getComma(money1,0)money1,* from @tmp
-
-
-
-
-
-
 ;
