@@ -99,7 +99,8 @@ left join style b on left(a.productno,1)=b.noa
 left join ucc c on right(a.productno,len(a.productno)-1)=c.noa
 where isnull(a.product,'')='' and len(a.productno)>=2
 
-select * from #ucccTemp order by dime desc,width,lengthb,uno
+select * from #ucccTemp order by dime desc,spec desc,width,lengthb,uno
+
 begin try
 	IF Object_id('tempdb..#ucccTemp') IS NOT NULL
 	BEGIN
