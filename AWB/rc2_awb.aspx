@@ -227,6 +227,9 @@
 						});
 					}
 				}
+				if($('#txtDatea').val().substr(0,6)!=$('#txtMon').val() && $('#txtMemo').val().indexOf($('#txtMon').val().replace('/','年')+'月')==-1){
+					$('#txtMemo').val($('#txtMemo').val()+' '+$('#txtMon').val().replace('/','年')+'月'+'帳款')
+				}
 				sum();
 				if (q_cur === 1)
 					$('#txtWorker').val(r_name);

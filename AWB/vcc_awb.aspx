@@ -19,7 +19,8 @@
 			var q_readonly = ['txtNoa','txtAddr','txtTel','txtTax','txtMoney','txtTotal'];
 			var q_readonlys = [];
 			var bbmNum = [['txtTax', 15, 0, 1],['txtMoney', 15, 0, 1],['txtTotal', 15, 0, 1],['txtFloata', 15, 3, 1]];
-			var bbsNum = [['txtDime', 15, 0, 1],['txtWidth', 15, 0, 1],['txtLengthb', 15, 0, 1],['txtMount', 15, 3, 1],['txtMount', 15, 3, 1],['txtMweight', 15, 3, 1],
+			//111/06/24 鑫匯 厚 寬 長 只輸入到小數兩位 林小姐
+			var bbsNum = [['txtDime', 10, 2, 0],['txtWidth', 10, 2, 0],['txtLengthb', 10, 2, 0],['txtMount', 15, 3, 1],['txtMount', 15, 3, 1],['txtMweight', 15, 3, 1],
 											['txtWeight', 15, 3, 1],['txtPrice', 15, 3, 1],['txtTotal', 15, 3, 1],['txtGweight', 15, 3, 1]];
 			var bbmMask = [];
 			var bbsMask = [];
@@ -232,8 +233,8 @@
 					$('#txtCoin').val('USD');
 				}
 				
-				if($('#txtDatea').val().substr(0,6)!=$('#txtMon').val()){
-					$('#txtMemo').val($('#txtMemo').val()+' '+$('#txtMon').val()+'帳款')
+				if($('#txtDatea').val().substr(0,6)!=$('#txtMon').val() && $('#txtMemo').val().indexOf($('#txtMon').val().replace('/','年')+'月')==-1){
+					$('#txtMemo').val($('#txtMemo').val()+' '+$('#txtMon').val().replace('/','年')+'月'+'帳款')
 				}
 				
 				var s1 = $('#txt' + bbmKey[0].substr(0, 1).toUpperCase() + bbmKey[0].substr(1)).val();
